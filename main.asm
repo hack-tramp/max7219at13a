@@ -25,27 +25,14 @@ matrix:	.byte	8
 
 ;note: r17 is used for looping
 
-ldi	ZL,LOW(matrix)		; initialize Z pointer
-ldi	ZH,HIGH(matrix)		; to matrix address
-
-;just fill matrix with some numbers
-ldi r17,8
-m_loop:
-    st Z+, r17 
-    dec r17
-    brne m_loop        ;    do it 8 times
-ldi ZL,LOW(matrix); reset pointer to first matrix byte
-ldi ZH,HIGH(matrix)
-
+rcall init
 
 ldi r18,2
 ldi r19,1
-ldi r20,0
+ldi r20,1
 rcall max_set_pixel
 
 init:
-
-
 	ldi	ZL,LOW(matrix)		; initialize Z pointer
 	ldi	ZH,HIGH(matrix)		; to matrix address
 
@@ -53,19 +40,19 @@ init:
 	out DDRB,r16
 	ldi r18,MAX7219_REG_DECODEMODE
 	ldi r19,0x00
-        	rcall max_send
+    rcall max_send
 	ldi r18,MAX7219_REG_SCANLIMIT
 	ldi r19,0x07
-        	rcall max_send
+    rcall max_send
 	ldi r18,MAX7219_REG_INTENSITY
 	ldi r19,0x0f
-        	rcall max_send
+    rcall max_send
 	ldi r18,MAX7219_REG_DISPLAYTEST
 	ldi r19,0x00
-        	rcall max_send
+    rcall max_send
 	ldi r18,MAX7219_REG_SHUTDOWN
 	ldi r19,0x01
-        	rcall max_send
+    rcall max_send
 	ret
 
 cs_high: 
