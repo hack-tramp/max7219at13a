@@ -19,24 +19,27 @@ matrix:	.byte	8
 #define MAX7219_REG_SHUTDOWN 0x0C
 #define MAX7219_REG_DISPLAYTEST 0x0F
 
-#define DIO_PIN 0b00000001 ; PB0 
-#define CLK_PIN 0b00000010 ; PB1 
-#define CS_PIN 0b00000100 ; PB2
+#define DIO_PIN PB0 ; PB0 
+#define CLK_PIN PB1 ; PB1 
+#define CS_PIN PB2 ; PB2
 
 ;note: r17 is used for looping
 
 rcall init
-
 ldi r18,2
 ldi r19,1
 ldi r20,1
 rcall max_set_pixel
 
+lp:
+	rjmp lp
+
+
 init:
 	ldi	ZL,LOW(matrix)		; initialize Z pointer
 	ldi	ZH,HIGH(matrix)		; to matrix address
 
-	ldi r16,(1<<DIO_PIN) | (1<<CLK_PIN) | (1<<CS_PIN)
+	ldi r16,0b00000111
 	out DDRB,r16
 	ldi r18,MAX7219_REG_DECODEMODE
 	ldi r19,0x00
@@ -80,8 +83,11 @@ max_write: ; param r16 input byte
 	cycle:
 		rcall clk_low
 		lsl r16 ; assuming input byte is in r16, we write each bit to the data pin
-		brcs data_high
-		brcc data_low
+		clr r21
+		mov r21,r16
+		andi r21,0x80
+		brne data_high
+		breq data_low
 		nop
 		rcall clk_high
 		dec r17
