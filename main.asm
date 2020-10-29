@@ -24,15 +24,10 @@ matrix:	.byte	8
 #define CS_PIN PB2 ; PB2
 
 ;note: r17 is used for looping
-
 rcall init
-ldi r18,2
-ldi r19,1
-ldi r20,1
-rcall max_set_pixel
 
-lp:
-	rjmp lp
+mainlp:
+	rjmp mainlp
 
 
 init:
@@ -41,6 +36,7 @@ init:
 
 	ldi r16,0b00000111
 	out DDRB,r16
+
 	ldi r18,MAX7219_REG_DECODEMODE
 	ldi r19,0x00
     rcall max_send
@@ -56,7 +52,11 @@ init:
 	ldi r18,MAX7219_REG_SHUTDOWN
 	ldi r19,0x01
     rcall max_send
-	ret
+
+	ldi r18,0x04
+	ldi r19,0x00
+	rcall max_send
+
 
 cs_high: 
 	sbi PORTB, CS_PIN
@@ -82,17 +82,17 @@ max_write: ; param r16 input byte
 	ldi r17,8 ;do this 8 times
 	cycle:
 		rcall clk_low
-		lsl r16 ; assuming input byte is in r16, we write each bit to the data pin
-		clr r21
-		mov r21,r16
-		andi r21,0x80
-		brne data_high
-		breq data_low
 		nop
-		rcall clk_high
+		sbrs r16,7 ;skip if bit 7 in register is set
+		rcall data_low
+		sbrc r16,7
+		rcall data_high
+		rcall clk_high 
+		add r16,r16
 		dec r17
 		brne cycle
 	ret
+
 
 max_send: ; params r18 reg, r19 data
 	rcall cs_high
