@@ -1,9 +1,9 @@
 .include "tn13adef.inc"
 .dseg
 .org SRAM_START
-matrix:	.byte	8	
+matrix:	.byte	8	;LED matrix in ram
 .cseg
-
+.org 0x00
 #define MAX7219_REG_NOOP 0x00
 #define MAX7219_REG_DIGIT0 0x01
 #define MAX7219_REG_DIGIT1 0x02
@@ -22,17 +22,67 @@ matrix:	.byte	8
 #define DIO_PIN PB0 ; PB0 
 #define CLK_PIN PB1 ; PB1 
 #define CS_PIN PB2 ; PB2
-
+#define waitfor 50
 ;note: r17 is used for looping
+
 rcall init
 
+
+
 mainlp:
+
+	;select char a
+	ldi	ZL,LOW(2*char_a)		; initialize Z pointer
+	ldi	ZH,HIGH(2*char_a)		; to pmem array address
+	rcall load_char ;load it to ram
+	rcall draw_ram
+
+	ldi r18,waitfor
+	rcall wait_time
+
+	;select char c
+	ldi	ZL,LOW(2*char_c)		; initialize Z pointer
+	ldi	ZH,HIGH(2*char_c)		; to pmem array address
+	rcall load_char ;load it to ram
+	rcall draw_ram
+
+	ldi r18,waitfor
+	rcall wait_time
+
+	;select char a
+	ldi	ZL,LOW(2*char_a)		; initialize Z pointer
+	ldi	ZH,HIGH(2*char_a)		; to pmem array address
+	rcall load_char ;load it to ram
+	rcall draw_ram
+
+	ldi r18,waitfor
+	rcall wait_time
+
+	;select char b
+	ldi	ZL,LOW(2*char_b)		; initialize Z pointer
+	ldi	ZH,HIGH(2*char_b)		; to pmem array address
+	rcall load_char ;load it to ram
+	rcall draw_ram
+
+	ldi r18,waitfor
+	rcall wait_time
+
+	;or just clear_max
+	rcall clear_ram
+	rcall draw_ram
+
+	ldi r18,waitfor
+	rcall wait_time
+
 	rjmp mainlp
 
 
 init:
-	ldi	ZL,LOW(matrix)		; initialize Z pointer
-	ldi	ZH,HIGH(matrix)		; to matrix address
+	ldi	XL,LOW(matrix)		; initialize pointer
+	ldi	XH,HIGH(matrix)		; to matrix address in ram
+	;default char
+	ldi	ZL,LOW(2*char_a)		; initialize Z pointer
+	ldi	ZH,HIGH(2*char_a)		; to pmem array address
 
 	ldi r16,0b00000111
 	out DDRB,r16
@@ -53,9 +103,65 @@ init:
 	ldi r19,0x01
     rcall max_send
 
-	ldi r18,0x04
-	ldi r19,0x00
-	rcall max_send
+	ret
+
+load_char:
+	ldi	XL,LOW(matrix)		; initialize pointer
+	ldi	XH,HIGH(matrix)		; to matrix address in ram
+	ldi r17,8
+	arrLp:	
+		lpm	r16,Z+			; load value from pmem array
+		st X+,r16			; store value to SRAM array
+		dec	r17			; decrement loop count
+		brne arrLp			; repeat loop for all bytes in array
+	ret
+
+draw_ram:
+	ldi	XL,LOW(matrix)		; initialize pointer
+	ldi	XH,HIGH(matrix)		; to matrix address in ram
+	ldi r22,0 ; second counter reg as we use r17 for sending
+	draw_loop:
+		inc r22
+		mov r18,r22
+		ld r19,X+
+		rcall max_send
+		cpi r22,8
+		brne draw_loop
+	ret
+
+clear_ram:
+	ldi XL,LOW(matrix); reset pointer to first matrix byte
+	ldi XH,HIGH(matrix)
+	ldi r17,8
+	ldi r16,0
+	clear_loop:
+		st X+, r16
+        dec r17
+		brne clear_loop        ;    do it 8 times
+	ret
+
+clear_max:
+	ldi r22,0 ; second counter reg as we use r17 for sending
+	drw_loop:
+		inc r22
+		mov r18,r22
+		ldi r19,0
+		rcall max_send
+		cpi r22,8
+		brne drw_loop
+	ret
+
+wait_time:
+    ldi r16,0                   ; these are timer counters
+    ldi r17,0
+	timer2:
+		inc r16                     ; do 256 iterations - 1 clock
+		brne timer2					; branch if not equal to beginning of timer2 - 1 clock * 256, then 1
+		inc r17                     ; do 256 times - 1 clock
+		brne timer2					; branch if not equal to beginning of timer2 - 1 clock * 256, then 1
+		dec r18						; do 5 times - 1 clock
+		brne timer2                 ; branch if not equal to beginning of timer2 - 1 clock * 5, then 1
+    ret                         ; once there have been 256 * 256 * 5 loops, return                      ; once there have been 256 * 256 * 5 loops, return
 
 
 cs_high: 
@@ -94,7 +200,7 @@ max_write: ; param r16 input byte
 	ret
 
 
-max_send: ; params r18 reg, r19 data
+max_send: ; params r18 reg/row, r19 data
 	rcall cs_high
 	mov r16,r18
 	rcall max_write
@@ -106,49 +212,6 @@ max_send: ; params r18 reg, r19 data
 	ret
 
 
-max_set_pixel: ;params r18 row, r19 col, r20 bool value
-	cpi r18,8 ; (signed) if bigger than 7
-	brsh ms_end
-	cpi r19,8
-	brge ms_end
-
-	mov r17,r19 ; 1 << col (r19)
-	bitwise_loop:	
-		lsl r19
-		dec r17
-		brne bitwise_loop
-	mov r17,r18 ; loop amount of rows (1st param)
-	ptr_loop:
-		inc r30 ; manually increase high and low Z regs so we dont need to st/ld every time
-		inc r31 ;move Z pointers to desired matrix element/byte/col
-		dec r17
-		brne ptr_loop
-	clr r21
-	ld r21,Z
-	cpi r20,1
-	brne bit_off
-	or r21,r19
-	bit_off:
-		com r19 ;one's compliment
-		and r21,r19
-	st Z,r21
-
-	inc r18
-	clr r19
-	mov r19,r21
-	rcall max_send
-
-	ldi ZL,LOW(matrix); reset pointer to first matrix byte
-	ldi ZH,HIGH(matrix)
-	ms_end:
-	ret
-
-max_clear:
-	ldi r17,8
-	clear_loop:
-		st Z+, r0 
-        dec r17
-		brne clear_loop        ;    do it 8 times
-	ldi ZL,LOW(matrix); reset pointer to first matrix byte
-	ldi ZH,HIGH(matrix)
-	ret
+char_a: .db 0b11111111,0b10000001,0b10000001,0b11111111,0b10000001,0b10000001,0b10000001,0b10000001 
+char_b: .db 0b11111110,0b10000001,0b10000001,0b11111110,0b10000001,0b10000001,0b10000001,0b11111110 
+char_c: .db 0b11111111,0b10000000,0b10000000,0b10000000,0b10000000,0b10000000,0b10000000,0b11111111 
