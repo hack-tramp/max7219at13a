@@ -23,58 +23,31 @@ matrix:	.byte	8	;LED matrix in ram
 #define CLK_PIN PB1 ; PB1 
 #define CS_PIN PB2 ; PB2
 #define waitfor 50
+#define scroll_speed 3
 ;note: r17 is used for looping
 
 rcall init
 
 
 
-mainlp:
+mainloop:
 
 	;select char a
 	ldi	ZL,LOW(2*char_a)		; initialize Z pointer
 	ldi	ZH,HIGH(2*char_a)		; to pmem array address
-	rcall load_char ;load it to ram
-	rcall draw_ram
+	rcall scroll_left
 
-	ldi r18,waitfor
-	rcall wait_time
-
-	;select char c
-	ldi	ZL,LOW(2*char_c)		; initialize Z pointer
-	ldi	ZH,HIGH(2*char_c)		; to pmem array address
-	rcall load_char ;load it to ram
-	rcall draw_ram
-
-	ldi r18,waitfor
-	rcall wait_time
-
-	;select char a
-	ldi	ZL,LOW(2*char_a)		; initialize Z pointer
-	ldi	ZH,HIGH(2*char_a)		; to pmem array address
-	rcall load_char ;load it to ram
-	rcall draw_ram
-
-	ldi r18,waitfor
-	rcall wait_time
-
-	;select char b
-	ldi	ZL,LOW(2*char_b)		; initialize Z pointer
-	ldi	ZH,HIGH(2*char_b)		; to pmem array address
-	rcall load_char ;load it to ram
-	rcall draw_ram
-
-	ldi r18,waitfor
+	ldi r24,waitfor
 	rcall wait_time
 
 	;or just clear_max
 	rcall clear_ram
 	rcall draw_ram
 
-	ldi r18,waitfor
+	ldi r24,waitfor
 	rcall wait_time
 
-	rjmp mainlp
+	rjmp mainloop
 
 
 init:
@@ -102,7 +75,83 @@ init:
 	ldi r18,MAX7219_REG_SHUTDOWN
 	ldi r19,0x01
     rcall max_send
+	rcall clear_ram
+	ret
 
+scroll_left:
+	ldi r21,2 ; number of chars 
+	char_loop:
+		ldi r25,0 ; counter for columns
+		col_loop:
+			ldi r20,0 ; counter for rows
+			ldi	XL,LOW(matrix)		; initialize pointer
+			ldi	XH,HIGH(matrix)		; to matrix address in ram
+			;inc r25
+			row_loop:
+				inc r20
+				mov r18,r20
+				ld r19,X	;load byte from ram to r19 
+				lsl r19 ; shift left 
+				lpm	r16,Z+ ; load value from pmem 
+
+				mov r17,r25 ; shift same number of total times to where we are
+				shift:
+					cpi r25,0
+					breq no_shift
+					lsl r16
+					dec r17 ; use r17 as counter - also used in max_send
+					brne shift
+				no_shift:
+				sbrc r16,7 ;add next bit from pmem/flash to end of byte
+				ori r19,1 ;if it was set , set bit 0 to 1
+				st X+,r19		;send that back to ram 
+				rcall max_send ; send it to be drawn 
+				cpi r20,8
+				brne row_loop
+			ldi r24,scroll_speed ;counter for wait_time / how long before each scroll step
+			rcall wait_time
+			subi	ZL,8		; initialize Z pointer
+			subi	ZH,8		; to pmem array address
+			inc r25
+			cpi r25,8
+			brne col_loop
+			;add a space after every char
+			ldi r20,0 ; counter for rows
+			ldi	XL,LOW(matrix)		; initialize pointer
+			ldi	XH,HIGH(matrix)		; to matrix address in ram
+			space_loop:
+				inc r20
+				mov r18,r20
+				ld r19,X	;load byte from ram to r19 
+				lsl r19 ; shift left 
+				st X+,r19		;send that back to ram 
+				rcall max_send ; send it to be drawn 
+				cpi r20,8
+				brne space_loop
+			ldi r24,scroll_speed ;counter for wait_time / how long before each scroll step
+			rcall wait_time
+		add ZL,r25 ;move Z ptr forward 8 to next char (using r25 as it contains 8)
+		add ZH,r25
+		dec r21
+		brne char_loop
+		ldi r25,7
+		scroll_out:
+			ldi r20,0 ; counter for rows
+			ldi	XL,LOW(matrix)		; initialize pointer
+			ldi	XH,HIGH(matrix)		; to matrix address in ram
+			add_space:
+				inc r20
+				mov r18,r20
+				ld r19,X	;load byte from ram to r19 
+				lsl r19 ; shift left 
+				st X+,r19		;send that back to ram 
+				rcall max_send ; send it to be drawn 
+				cpi r20,8
+				brne add_space
+			ldi r24,scroll_speed ;counter for wait_time / how long before each scroll step
+			rcall wait_time
+			dec r25
+			brne scroll_out
 	ret
 
 load_char:
@@ -116,16 +165,18 @@ load_char:
 		brne arrLp			; repeat loop for all bytes in array
 	ret
 
+
+
 draw_ram:
 	ldi	XL,LOW(matrix)		; initialize pointer
 	ldi	XH,HIGH(matrix)		; to matrix address in ram
-	ldi r22,0 ; second counter reg as we use r17 for sending
+	ldi r20,0 ; second counter reg as we use r17 for sending
 	draw_loop:
-		inc r22
-		mov r18,r22
+		inc r20
+		mov r18,r20
 		ld r19,X+
 		rcall max_send
-		cpi r22,8
+		cpi r20,8
 		brne draw_loop
 	ret
 
@@ -152,16 +203,16 @@ clear_max:
 	ret
 
 wait_time:
-    ldi r16,0                   ; these are timer counters
-    ldi r17,0
+    ldi r22,0                   ; these are timer counters
+    ldi r23,0
 	timer2:
-		inc r16                     ; do 256 iterations - 1 clock
+		inc r22                     ; do 256 iterations - 1 clock
 		brne timer2					; branch if not equal to beginning of timer2 - 1 clock * 256, then 1
-		inc r17                     ; do 256 times - 1 clock
+		inc r23                     ; do 256 times - 1 clock
 		brne timer2					; branch if not equal to beginning of timer2 - 1 clock * 256, then 1
-		dec r18						; do 5 times - 1 clock
-		brne timer2                 ; branch if not equal to beginning of timer2 - 1 clock * 5, then 1
-    ret                         ; once there have been 256 * 256 * 5 loops, return                      ; once there have been 256 * 256 * 5 loops, return
+		dec r24						; do x times - 1 clock
+		brne timer2                 ; branch if not equal to beginning of timer2 - 1 clock * r24, then 1
+    ret                         ; once there have been 256 * 256 * r24 loops, return                      ; once there have been 256 * 256 * r24 loops, return
 
 
 cs_high: 
@@ -213,5 +264,5 @@ max_send: ; params r18 reg/row, r19 data
 
 
 char_a: .db 0b11111111,0b10000001,0b10000001,0b11111111,0b10000001,0b10000001,0b10000001,0b10000001 
-char_b: .db 0b11111110,0b10000001,0b10000001,0b11111110,0b10000001,0b10000001,0b10000001,0b11111110 
-char_c: .db 0b11111111,0b10000000,0b10000000,0b10000000,0b10000000,0b10000000,0b10000000,0b11111111 
+char_b:	.db	0b11111110,0b10000001,0b10000001,0b11111110,0b10000001,0b10000001,0b10000001,0b11111110 
+char_c:	.db	0b11111111,0b10000000,0b10000000,0b10000000,0b10000000,0b10000000,0b10000000,0b11111111  
