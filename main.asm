@@ -32,30 +32,20 @@ rcall init
 
 mainloop:
 
-	;select char a
-	ldi	ZL,LOW(2*char_a)		; initialize Z pointer
-	ldi	ZH,HIGH(2*char_a)		; to pmem array address
-	rcall scroll_left
+	rcall scroll_left ;scroll text in and out of view
 
 	ldi r24,waitfor
-	rcall wait_time
+	rcall wait_time ; wait a bit
 
-	;or just clear_max
-	rcall clear_ram
-	rcall draw_ram
-
-	ldi r24,waitfor
-	rcall wait_time
-
-	rjmp mainloop
+	rjmp mainloop ;repeat
 
 
 init:
 	ldi	XL,LOW(matrix)		; initialize pointer
 	ldi	XH,HIGH(matrix)		; to matrix address in ram
 	;default char
-	ldi	ZL,LOW(2*char_a)		; initialize Z pointer
-	ldi	ZH,HIGH(2*char_a)		; to pmem array address
+	ldi	ZL,LOW(2*text)		; initialize Z pointer
+	ldi	ZH,HIGH(2*text)		; to pmem array address
 
 	ldi r16,0b00000111
 	out DDRB,r16
@@ -79,7 +69,9 @@ init:
 	ret
 
 scroll_left:
-	ldi r21,2 ; number of chars 
+	ldi	ZL,LOW(2*text)		; initialize Z pointer
+	ldi	ZH,HIGH(2*text)		; to pmem array address
+	ldi r21,8 ; number of chars 
 	char_loop:
 		ldi r25,0 ; counter for columns
 		col_loop:
@@ -263,6 +255,14 @@ max_send: ; params r18 reg/row, r19 data
 	ret
 
 
-char_a: .db 0b11111111,0b10000001,0b10000001,0b11111111,0b10000001,0b10000001,0b10000001,0b10000001 
-char_b:	.db	0b11111110,0b10000001,0b10000001,0b11111110,0b10000001,0b10000001,0b10000001,0b11111110 
-char_c:	.db	0b11111111,0b10000000,0b10000000,0b10000000,0b10000000,0b10000000,0b10000000,0b11111111  
+text:   ;.db 0b11111111,0b10000001,0b10000001,0b11111111,0b10000001,0b10000001,0b10000001,0b10000001 ;A
+		;.db	0b11111110,0b10000001,0b10000001,0b11111110,0b10000001,0b10000001,0b10000001,0b11111110 ;B
+		;.db	0b11111111,0b10000000,0b10000000,0b10000000,0b10000000,0b10000000,0b10000000,0b11111111 ;C
+		.db 0b10000001,0b10000001,0b10000001,0b11111111,0b10000001,0b10000001,0b10000001,0b10000001 ;H
+		.db 0b01111110,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b01111110 ;I
+		.db 0b00000000,0b00000000,0b00000000,0b00000000,0b00000000,0b00000000,0b00000000,0b00000000 ;space
+		.db 0b11111111,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000,0b00011000 ;T
+		.db 0b10000001,0b10000001,0b10000001,0b11111111,0b10000001,0b10000001,0b10000001,0b10000001 ;H
+		.db 0b11111111,0b10000000,0b10000000,0b11111111,0b10000000,0b10000000,0b10000000,0b11111111 ;E
+		.db	0b11111110,0b10000001,0b10000001,0b11111110,0b10000001,0b10000001,0b10000001,0b10000001 ;R
+		.db 0b11111111,0b10000000,0b10000000,0b11111111,0b10000000,0b10000000,0b10000000,0b11111111 ;E
