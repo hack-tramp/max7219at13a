@@ -24,6 +24,7 @@ matrix:	.byte	8	;LED matrix in ram
 #define CS_PIN PB2 ; PB2
 #define scroll_speed 3 ;lower is faster
 #define space_dist 3 ;a 0 (space) char will be displayed as this +1 number of spaces, rather than the full 8 spaces
+#define charno 7 ;number of chars to display - should reflect how many are in flash (including empty/space chars)
 ;note: r17 is used for looping
 
 rcall init
@@ -50,6 +51,8 @@ mainloop:
 
 	rjmp mainloop ;repeat
 
+	ldi r24,50
+	rcall wait_time ; wait a bit
 
 init:
 	ldi	XL,LOW(matrix)		; initialize pointer
@@ -82,7 +85,7 @@ init:
 scroll_left:
 	ldi	ZL,LOW(2*text)		; initialize Z pointer
 	ldi	ZH,HIGH(2*text)		; to pmem array address
-	ldi r21,7 ; number of chars (excludes spaces) 
+	ldi r21,charno ; number of chars (excludes spaces) 
 	char_loop:
 
 		;first check if this char is 0 (space)
