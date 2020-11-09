@@ -25,7 +25,8 @@ matrix:	.byte	8	;LED matrix in ram
 #define scroll_speed 3 ;lower is faster
 #define space_dist 3 ;a 0 (space) char will be displayed as this +1 number of spaces, rather than the full 8 spaces
 #define charno 7 ;number of chars to display - should reflect how many are in flash (including empty/space chars)
-;note: r17 is used for looping
+;note: the following registers are used as counters in loops:
+;17,22,23,24
 
 rcall init
 
@@ -49,17 +50,13 @@ mainloop:
 	rcall clear_ram ;erase
 	rcall draw_ram
 
-	rjmp mainloop ;repeat
-
 	ldi r24,50
 	rcall wait_time ; wait a bit
 
+	rjmp mainloop ;repeat
+
+
 init:
-	ldi	XL,LOW(matrix)		; initialize pointer
-	ldi	XH,HIGH(matrix)		; to matrix address in ram
-	;default char
-	ldi	ZL,LOW(2*text)		; initialize Z pointer
-	ldi	ZH,HIGH(2*text)		; to pmem array address
 
 	ldi r16,0b00000111
 	out DDRB,r16
@@ -79,7 +76,9 @@ init:
 	ldi r18,MAX7219_REG_SHUTDOWN
 	ldi r19,0x01
     rcall max_send
+
 	rcall clear_ram
+
 	ret
 
 scroll_left:
@@ -100,9 +99,8 @@ scroll_left:
 			brne space_check
 			ldi r25,space_dist ;if we got through the char and all is zero (space)
 			rcall shift_space
-			ldi r25,8 ;skip the space char
-			add r28,r25
-			add r29,r25
+			subi r28,-8 ; add 8 to restore old Z ptr value 
+			subi r29,-8
 
 
 		not_space:
@@ -113,10 +111,8 @@ scroll_left:
 			ldi r20,0 ; counter for rows
 			ldi	XL,LOW(matrix)		; initialize pointer
 			ldi	XH,HIGH(matrix)		; to matrix address in ram
-			;inc r25
 			row_loop:
 				inc r20
-				;mov r18,r20
 				ld r19,X	;load byte from ram to r19 
 				lsl r19 ; shift left 
 				lpm	r18,Z+ ; load value from pmem 
@@ -142,13 +138,11 @@ scroll_left:
 			inc r25
 			cpi r25,8
 			brne col_loop
-
-			space_char: ;add a space after every char
+			;add a space after every char
 			ldi r25,1
 			rcall shift_space
-			ldi r25,8 ;set back to 8 as it was before being used for shift_space
-		add ZL,r25 ;move Z ptr forward 8 to next char (using r25 as it contains 8)
-		add ZH,r25
+		subi ZL,-8 ;move Z ptr forward 8 to next char (neg subi = add)
+		subi ZH,-8
 		dec r21
 		brne char_loop
 		ldi r25,7
@@ -158,17 +152,16 @@ scroll_left:
 shift_space: ; scroll left adding a space. param: r25, no. of spaces 
 	;mov r17,r18 ;ldi r17,7
 	shift_loop:
-		ldi r20,0 ; counter for rows
 		ldi	XL,LOW(matrix)		; initialize pointer
 		ldi	XH,HIGH(matrix)		; to matrix address in ram
+		clr r18
 		add_space:
-			inc r20
-			mov r18,r20
+			inc r18
 			ld r19,X	;load byte from ram to r19 
 			lsl r19 ; shift left 
 			st X+,r19		;send that back to ram 
 			rcall max_send ; send it to be drawn 
-			cpi r20,8
+			cpi r18,8
 			brne add_space
 		ldi r24,scroll_speed ;counter for wait_time / how long before each scroll step
 		rcall wait_time
@@ -192,13 +185,12 @@ load_char:
 draw_ram:
 	ldi	XL,LOW(matrix)		; initialize pointer
 	ldi	XH,HIGH(matrix)		; to matrix address in ram
-	ldi r20,0 ; second counter reg as we use r17 for sending
+	clr r18
 	draw_loop:
-		inc r20
-		mov r18,r20
+		inc r18
 		ld r19,X+
 		rcall max_send
-		cpi r20,8
+		cpi r18,8
 		brne draw_loop
 	ret
 
@@ -214,13 +206,12 @@ clear_ram:
 	ret
 
 clear_max:
-	ldi r22,0 ; second counter reg as we use r17 for sending
+	clr r18
 	drw_loop:
-		inc r22
-		mov r18,r22
+		inc r18
 		ldi r19,0
 		rcall max_send
-		cpi r22,8
+		cpi r18,8
 		brne drw_loop
 	ret
 
